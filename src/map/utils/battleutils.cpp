@@ -968,7 +968,8 @@ namespace battleutils
         }
 
         // Enspell overwrites weapon effects
-        if (PAttacker->getMod(Mod::ENSPELL) > 0)
+        if (PAttacker->getMod(Mod::ENSPELL) > 0 && (PAttacker->getMod(Mod::ENSPELL_CHANCE) == 0 ||
+            PAttacker->getMod(Mod::ENSPELL_CHANCE) > dsprand::GetRandomNumber(100)))
         {
             SUBEFFECT subeffects[8] = { SUBEFFECT_LIGHT_DAMAGE, SUBEFFECT_DARKNESS_DAMAGE, SUBEFFECT_FIRE_DAMAGE, SUBEFFECT_EARTH_DAMAGE,
                 SUBEFFECT_WATER_DAMAGE, SUBEFFECT_WIND_DAMAGE, SUBEFFECT_ICE_DAMAGE, SUBEFFECT_LIGHTNING_DAMAGE };
@@ -1707,6 +1708,15 @@ namespace battleutils
             if (PMob->m_EcoSystem != SYSTEM_UNDEAD && PMob->m_EcoSystem != SYSTEM_BEASTMEN)
                 return 0;
         }
+        else if (PDefender->objtype == TYPE_PET && static_cast<CPetEntity*>(PDefender)->getPetType() == PETTYPE_AUTOMATON && PDefender->GetMJob() == JOB_PLD)
+        {
+            float skillmodifier = (PDefender->GetSkill(SKILL_AME) - attackskill) * 0.215f;
+            base = PDefender->getMod(Mod::SHIELDBLOCKRATE);
+            if (base <= 0)
+                return 0;
+            else
+                return base + (int32)skillmodifier;
+        }
         else
             return 0;
 
@@ -1881,6 +1891,19 @@ namespace battleutils
                         //Shield Mastery
                         if ((dsp_max(damage - (PDefender->getMod(Mod::PHALANX) + PDefender->getMod(Mod::STONESKIN)), 0) > 0)
                             && (charutils::hasTrait((CCharEntity*)PDefender, TRAIT_SHIELD_MASTERY)))
+                        {
+                            // If the player blocked with a shield and has shield mastery, add shield mastery TP bonus
+                            // unblocked damage (before block but as if affected by stoneskin/phalanx) must be greater than zero
+                            PDefender->addTP(PDefender->getMod(Mod::SHIELD_MASTERY_TP));
+                        }
+                    }
+                    else if (PDefender->objtype == TYPE_PET)
+                    {
+                        absorb = 50;
+
+                        //Shield Mastery
+                        if ((dsp_max(damage - (PDefender->getMod(Mod::PHALANX) + PDefender->getMod(Mod::STONESKIN)), 0) > 0)
+                            && (PDefender->getMod(Mod::SHIELD_MASTERY_TP)))
                         {
                             // If the player blocked with a shield and has shield mastery, add shield mastery TP bonus
                             // unblocked damage (before block but as if affected by stoneskin/phalanx) must be greater than zero
@@ -2085,9 +2108,18 @@ namespace battleutils
 
         if (PDefender->objtype == TYPE_MOB)
         {
-            PDefender->m_OwnerID.id = PChar->id;
-            PDefender->m_OwnerID.targid = PChar->targid;
-            PDefender->updatemask |= UPDATE_STATUS;
+            if (PChar->PMaster != nullptr)
+            {
+                PDefender->m_OwnerID.id = PChar->PMaster->id;
+                PDefender->m_OwnerID.targid = PChar->PMaster->targid;
+                PDefender->updatemask |= UPDATE_STATUS;
+            }
+            else
+            {
+                PDefender->m_OwnerID.id = PChar->id;
+                PDefender->m_OwnerID.targid = PChar->targid;
+                PDefender->updatemask |= UPDATE_STATUS;
+            }
         }
 
         if (damage > 0)
